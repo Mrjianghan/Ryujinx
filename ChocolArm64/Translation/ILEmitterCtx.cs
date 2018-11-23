@@ -11,6 +11,9 @@ namespace ChocolArm64.Translation
     class ILEmitterCtx
     {
         private TranslatorCache _cache;
+        private TranslatorQueue _queue;
+
+        private int _depth;
 
         private Dictionary<long, ILLabel> _labels;
 
@@ -42,13 +45,18 @@ namespace ChocolArm64.Translation
 
         public ILEmitterCtx(
             TranslatorCache cache,
+            TranslatorQueue queue,
             Block[]         graph,
             Block           root,
-            string          subName)
+            string          subName,
+            int             depth)
         {
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+            _queue = queue ?? throw new ArgumentNullException(nameof(queue));
             _graph = graph ?? throw new ArgumentNullException(nameof(graph));
             _root  = root  ?? throw new ArgumentNullException(nameof(root));
+
+            _depth = depth;
 
             _labels = new Dictionary<long, ILLabel>();
 
@@ -64,9 +72,9 @@ namespace ChocolArm64.Translation
             }
         }
 
-        public TranslatedSub GetSubroutine()
+        public TranslatedSub GetSubroutine(TranslationCodeQuality cq)
         {
-            return _emitter.GetSubroutine();
+            return _emitter.GetSubroutine(cq);
         }
 
         public bool AdvanceOpCode()
@@ -126,6 +134,20 @@ namespace ChocolArm64.Translation
             MarkLabel(lblContinue);
         }
 
+        public void TranslateAhead(long position)
+        {
+            if (_depth > 16 || _cache.HasSubroutine(position))
+            {
+                return;
+            }
+
+            _queue.Enqueue(new TranslatorQueueItem(
+                position,
+                _depth + 1,
+                TranslationPriority.High,
+                TranslationCodeQuality.Low));
+        }
+
         public bool TryOptEmitSubroutineCall()
         {
             if (CurrBlock.Next == null)
@@ -148,7 +170,7 @@ namespace ChocolArm64.Translation
                 EmitLdarg(index);
             }
 
-            foreach (Register reg in subroutine.Params)
+            foreach (Register reg in subroutine.SubArgs)
             {
                 switch (reg.Type)
                 {
@@ -175,7 +197,7 @@ namespace ChocolArm64.Translation
             Stloc(Tmp3Index, IoType.Int);
         }
 
-        private Dictionary<Cond, System.Reflection.Emit.OpCode> _branchOps = new Dictionary<Cond, System.Reflection.Emit.OpCode>()
+        private Dictionary<Cond, OpCode> _branchOps = new Dictionary<Cond, OpCode>()
         {
             { Cond.Eq,   OpCodes.Beq    },
             { Cond.Ne,   OpCodes.Bne_Un },
@@ -191,7 +213,7 @@ namespace ChocolArm64.Translation
 
         public void EmitCondBranch(ILLabel target, Cond cond)
         {
-            System.Reflection.Emit.OpCode ilOp;
+            OpCode ilOp;
 
             int intCond = (int)cond;
 
@@ -289,7 +311,7 @@ namespace ChocolArm64.Translation
         public void EmitLsr(int amount) => EmitIlShift(amount, OpCodes.Shr_Un);
         public void EmitAsr(int amount) => EmitIlShift(amount, OpCodes.Shr);
 
-        private void EmitIlShift(int amount, System.Reflection.Emit.OpCode ilOp)
+        private void EmitIlShift(int amount, OpCode ilOp)
         {
             if (amount > 0)
             {
@@ -336,12 +358,12 @@ namespace ChocolArm64.Translation
             _ilBlock.Add(label);
         }
 
-        public void Emit(System.Reflection.Emit.OpCode ilOp)
+        public void Emit(OpCode ilOp)
         {
             _ilBlock.Add(new ILOpCode(ilOp));
         }
 
-        public void Emit(System.Reflection.Emit.OpCode ilOp, ILLabel label)
+        public void Emit(OpCode ilOp, ILLabel label)
         {
             _ilBlock.Add(new ILOpCodeBranch(ilOp, label));
         }
@@ -536,7 +558,7 @@ namespace ChocolArm64.Translation
             EmitZnCheck(OpCodes.Clt, (int)PState.NBit);
         }
 
-        private void EmitZnCheck(System.Reflection.Emit.OpCode ilCmpOp, int flag)
+        private void EmitZnCheck(OpCode ilCmpOp, int flag)
         {
             Emit(OpCodes.Dup);
             Emit(OpCodes.Ldc_I4_0);

@@ -19,8 +19,6 @@ namespace ChocolArm64.Translation
 
         private ILBlock _root;
 
-        private TranslatedSub _subroutine;
-
         private string _subName;
 
         private int _localsCount;
@@ -28,8 +26,6 @@ namespace ChocolArm64.Translation
         public ILEmitter(Block[] graph, Block root, string subName)
         {
             _subName = subName;
-
-            _locals = new Dictionary<Register, int>();
 
             _ilBlocks = new ILBlock[graph.Length];
 
@@ -61,24 +57,11 @@ namespace ChocolArm64.Translation
 
         public ILBlock GetIlBlock(int index) => _ilBlocks[index];
 
-        public TranslatedSub GetSubroutine()
+        public TranslatedSub GetSubroutine(TranslationCodeQuality cq)
         {
             LocalAlloc = new LocalAlloc(_ilBlocks, _root);
 
-            InitSubroutine();
-            InitLocals();
-
-            foreach (ILBlock ilBlock in _ilBlocks)
-            {
-                ilBlock.Emit(this);
-            }
-
-            return _subroutine;
-        }
-
-        private void InitSubroutine()
-        {
-            List<Register> Params = new List<Register>();
+            List<Register> subArgs = new List<Register>();
 
             void SetParams(long inputs, RegisterType baseType)
             {
@@ -88,7 +71,7 @@ namespace ChocolArm64.Translation
 
                     if ((inputs & mask) != 0)
                     {
-                        Params.Add(GetRegFromBit(bit, baseType));
+                        subArgs.Add(GetRegFromBit(bit, baseType));
                     }
                 }
             }
@@ -96,26 +79,32 @@ namespace ChocolArm64.Translation
             SetParams(LocalAlloc.GetIntInputs(_root), RegisterType.Int);
             SetParams(LocalAlloc.GetVecInputs(_root), RegisterType.Vector);
 
-            DynamicMethod mthd = new DynamicMethod(_subName, typeof(long), GetParamTypes(Params));
+            DynamicMethod mthd = new DynamicMethod(_subName, typeof(long), GetParamTypes(subArgs));
 
             Generator = mthd.GetILGenerator();
 
-            _subroutine = new TranslatedSub(mthd, Params);
-        }
+            TranslatedSub subroutine = new TranslatedSub(mthd, subArgs, cq);
 
-        private void InitLocals()
-        {
-            int paramsStart = TranslatedSub.FixedArgTypes.Length;
+            int argsStart = TranslatedSub.FixedArgTypes.Length;
 
             _locals = new Dictionary<Register, int>();
 
-            for (int index = 0; index < _subroutine.Params.Count; index++)
-            {
-                Register reg = _subroutine.Params[index];
+            _localsCount = 0;
 
-                Generator.EmitLdarg(index + paramsStart);
+            for (int index = 0; index < subroutine.SubArgs.Count; index++)
+            {
+                Register reg = subroutine.SubArgs[index];
+
+                Generator.EmitLdarg(index + argsStart);
                 Generator.EmitStloc(GetLocalIndex(reg));
             }
+
+            foreach (ILBlock ilBlock in _ilBlocks)
+            {
+                ilBlock.Emit(this);
+            }
+
+            return subroutine;
         }
 
         private Type[] GetParamTypes(IList<Register> Params)

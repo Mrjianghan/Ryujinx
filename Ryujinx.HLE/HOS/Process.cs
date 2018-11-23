@@ -332,7 +332,7 @@ namespace Ryujinx.HLE.HOS
         {
             if (Translator == null)
             {
-                Translator = new Translator();
+                Translator = new Translator(Memory);
 
                 Translator.CpuTrace += CpuTraceHandler;
             }
