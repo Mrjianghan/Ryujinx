@@ -1,4 +1,5 @@
 ﻿using ChocolArm64.Memory;
+using Ryujinx.Common;
 using Ryujinx.Graphics.Gal;
 using Ryujinx.Graphics.Memory;
 using System;
@@ -331,17 +332,19 @@ namespace Ryujinx.Graphics.Texture
         {
             ImageDescriptor Desc = GetImageDescriptor(Image.Format);
 
-            int Width  = DivRoundUp(Image.Width,  Desc.BlockWidth);
-            int Height = DivRoundUp(Image.Height, Desc.BlockHeight);
+            int Width  = BitUtils.DivRoundUp(Image.Width,  Desc.BlockWidth);
+            int Height = BitUtils.DivRoundUp(Image.Height, Desc.BlockHeight);
 
-            return Desc.BytesPerPixel * Width * Height;
+            int Pitch = (Desc.BytesPerPixel * Width + 3) & ~3;
+
+            return Pitch * Height;
         }
 
         public static int GetPitch(GalImageFormat Format, int Width)
         {
             ImageDescriptor Desc = GetImageDescriptor(Format);
 
-            int Pitch = Desc.BytesPerPixel * DivRoundUp(Width, Desc.BlockWidth);
+            int Pitch = Desc.BytesPerPixel * BitUtils.DivRoundUp(Width, Desc.BlockWidth);
 
             Pitch = (Pitch + 0x1f) & ~0x1f;
 
@@ -380,18 +383,13 @@ namespace Ryujinx.Graphics.Texture
         {
             ImageDescriptor Desc = GetImageDescriptor(Image.Format);
 
-            return (DivRoundUp(Image.Width,  Desc.BlockWidth),
-                    DivRoundUp(Image.Height, Desc.BlockHeight));
+            return (BitUtils.DivRoundUp(Image.Width,  Desc.BlockWidth),
+                    BitUtils.DivRoundUp(Image.Height, Desc.BlockHeight));
         }
 
         public static int GetBytesPerPixel(GalImageFormat Format)
         {
             return GetImageDescriptor(Format).BytesPerPixel;
-        }
-
-        private static int DivRoundUp(int LHS, int RHS)
-        {
-            return (LHS + (RHS - 1)) / RHS;
         }
 
         public static bool HasColor(GalImageFormat Format)

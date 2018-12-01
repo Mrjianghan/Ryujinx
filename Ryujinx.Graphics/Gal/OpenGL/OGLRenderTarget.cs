@@ -461,9 +461,13 @@ namespace Ryujinx.Graphics.Gal.OpenGL
 
             GL.BindBuffer(BufferTarget.PixelPackBuffer, CopyPBO);
 
-            //The buffer should be large enough to hold the largest texture.
+            //The buffer should be large enough to hold the largest texture,
+            //because unpacking will attempt to access the whole buffer is the
+            //new image is larger.
             int BufferSize = Math.Max(ImageUtils.GetSize(OldImage),
                                       ImageUtils.GetSize(NewImage));
+
+            GL.PixelStore(PixelStoreParameter.PackRowLength, OldImage.Width);
 
             GL.BufferData(BufferTarget.PixelPackBuffer, BufferSize, IntPtr.Zero, BufferUsageHint.StreamCopy);
 
@@ -485,6 +489,7 @@ namespace Ryujinx.Graphics.Gal.OpenGL
 
             Texture.Create(Key, ImageUtils.GetSize(NewImage), NewImage);
 
+            GL.PixelStore(PixelStoreParameter.PackRowLength, 0);
             GL.PixelStore(PixelStoreParameter.UnpackRowLength, 0);
 
             GL.BindBuffer(BufferTarget.PixelUnpackBuffer, 0);

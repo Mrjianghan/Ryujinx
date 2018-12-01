@@ -32,6 +32,11 @@ namespace Ryujinx.Common
             return Value & -(long)Size;
         }
 
+        public static int DivRoundUp(int Value, int Dividend)
+        {
+            return (Value + Dividend - 1) / Dividend;
+        }
+
         public static ulong DivRoundUp(ulong Value, uint Dividend)
         {
             return (Value + Dividend - 1) / Dividend;
